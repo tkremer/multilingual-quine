@@ -1,0 +1,127 @@
+#####LANGUAGE(scheme)#####
+#####SEPARATOR(__PAYLOAD__)#####
+#####TEST(guile --no-auto-compile %s %s > %s)#####
+#!/usr/bin/guile
+
+  multilingual-quine - a quine that can produce its source in multiple languages.
+ 
+  Copyright (c) 2021 Thomas Kremer
+ 
+  This program is free software; you can redistribute it and/or modify it
+  under the terms of the GNU General Public License version 2 or 3 as
+  published by the Free Software Foundation.
+ 
+  usage:
+    ./multilingual-quine > same.scm
+    ./multilingual-quine --lang python > same.py
+   only in the perl version:
+    ./multilingual-quine --unpack <destdir>
+    ./multilingual-quine --pack <srcdir>
+!#
+
+(define payload "__PAYLOAD__")
+
+(define (reduce f start l)
+  (if (null? l)
+    start
+    (f (car l) (reduce f start (cdr l)))
+  )
+)
+
+(define (reduce-left f start l)
+  (if (null? l)
+    start
+    (reduce f (f (car l) start) (cdr l))
+  )
+)
+
+(define (reduce2 f start l)
+  (if (null? l)
+    start
+    (f (car l) (cadr l) (reduce2 f start (cddr l)))
+  )
+)
+
+(define lang
+  (cdr (reduce-left
+    (lambda (opt ctx)
+      (if (null? (car ctx))
+        (if (equal? (string-ref opt 0) #\-)
+          (cons opt (cdr ctx))
+          (error (string-append "invalid args: " opt))
+        )
+        (cons '() (if (equal? (car ctx) "--lang") opt (cdr ctx)))
+      )
+    )
+    (cons '() "scheme")
+    (cdr (command-line))
+  ))
+)
+
+(define (unpack_hex hex)
+  (let* (
+      (ca (char->integer #\a))
+      (cg (+ ca 6))
+      (c0 (char->integer #\0))
+      (c10 (+ c0 10))
+    )
+    (list->string
+      (reduce2
+        (lambda (h l rest) (cons (integer->char (+ l (* h 16))) rest))
+        '()
+        (map (lambda (c)
+               (let ((i (char->integer c)))
+                 (if (and (>= i c0) (< i c10))
+                   (- i c0)
+                   (+ (- i ca) 10)
+                 )
+               )
+             ) (string->list hex)
+        )
+      )
+    )
+  )
+)
+
+(define (unpack_V hex)
+  (reduce
+    (lambda (c res) (+ (char->integer c) (* res 256)))
+    0
+    (string->list (unpack_hex (substring hex 0 8)))
+  )
+)
+
+(define (unpack_payload_elements pl i)
+  (if (= i 0)
+    pl
+    (let* (
+        (len (* 2 (unpack_V pl)))
+        (chunk (substring pl 8 (+ 8 len)))
+        (more (substring pl (+ 8 len)))
+      )
+      (cons chunk (unpack_payload_elements more (- i 1)))
+    )
+  )
+)
+
+(define (unpack_header_footer payload lang)
+  (if (= (string-length payload) 0)
+    (error "language not found")
+    (let* (
+      (stuff (unpack_payload_elements payload 3))
+      (l (unpack_hex (car stuff)))
+      (head (cadr stuff))
+      (foot (caddr stuff))
+      (more (cdddr stuff)))
+      (if (equal? lang l)
+        (cons (unpack_hex head) (unpack_hex foot))
+        (unpack_header_footer more lang)
+      )
+    )
+  )
+)
+
+(let ((headfoot (unpack_header_footer payload lang)))
+  (display (string-append (car headfoot) payload (cdr headfoot)))
+)
+

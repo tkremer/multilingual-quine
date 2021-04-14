@@ -1,0 +1,85 @@
+#####LANGUAGE(java)#####
+#####SEPARATOR(__PAYLOAD__)#####
+#####TEST(cp %s MultilingualQuine.java; javac MultilingualQuine.java && java MultilingualQuine %s > %s; rm MultilingualQuine.java MultilingualQuine.class)#####
+
+/*
+ multilingual-quine - a quine that can produce its source in multiple languages.
+
+ Copyright (c) 2021 Thomas Kremer
+
+ This program is free software; you can redistribute it and/or modify it
+ under the terms of the GNU General Public License version 2 or 3 as
+ published by the Free Software Foundation.
+
+ usage:
+   cp multilingual-quine MultilingualQuine.java
+   javac MultilingualQuine.java
+   java MultilingualQuine > same.java
+   java MultilingualQuine --lang python > same.py
+  only in the perl version:
+   ./multilingual-quine --unpack <destdir>
+   ./multilingual-quine --pack <srcdir>
+*/
+
+public class MultilingualQuine {
+  public static String payload = "__PAYLOAD__";
+
+  public static int unpackV(byte[] bin, int pos) {
+    int[] arr = {0,0,0,0};
+    for (int i = 0; i < 4; i++) {
+      arr[i] = (bin[pos+i]+256) % 256;
+    }
+    return arr[0]+arr[1]*256+(arr[2]+arr[3]*256)*65536;
+  }
+
+  public static byte[] parse_hex(String s) {
+    int l = s.length()/2;
+    byte[] res = new byte[l];
+    for (int i = 0; i < l; i++) {
+      res[i] = (byte)Integer.parseInt(s.substring(2*i,2*i+2),16);
+    }
+    return res;
+  }
+
+  public static String[] unpack_header_footer(String payload, String lang) {
+    byte[] bin = parse_hex(payload);
+    int pos = 0;
+    while (pos+4 <= bin.length) {
+      int l = unpackV(bin,pos);
+      int p1 = pos+4+l;
+      int l1 = unpackV(bin,p1);
+      int p2 = p1+4+l1;
+      int l2 = unpackV(bin,p2);
+      try {
+        String lang2 = new String(bin,pos+4,l,"ISO-8859-1");
+        if (lang2.equals(lang)) {
+          return new String[] {
+            new String(bin,p1+4,l1,"ISO-8859-1"),
+            new String(bin,p2+4,l2,"ISO-8859-1")
+          };
+        }
+      } catch (Exception e) {
+        System.err.println(e);
+        System.exit(2);
+      } //UnsupportedEncodingException
+      pos = p2+4+l2;
+    }
+    System.err.println("language \""+lang+"\" not found.");
+    System.exit(2);
+    return new String[0];
+  }
+
+  public static void main(String[] argv) {
+    String lang = "java";
+    for (int i = 0; i < argv.length; i++) {
+      if (argv[i].equals("--lang")) {
+        i++;
+        lang = argv[i];
+      } else {
+        System.err.println("invalid args");
+      }
+    }
+    String[] headerfooter = unpack_header_footer(payload,lang);
+    System.out.print(headerfooter[0]+payload+headerfooter[1]);
+  }
+}

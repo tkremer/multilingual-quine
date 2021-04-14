@@ -1,0 +1,47 @@
+#####LANGUAGE(python)#####
+#####SEPARATOR(__PAYLOAD__)#####
+#####TEST(python3 %s %s > %s)#####
+#!/usr/bin/python3
+
+# multilingual-quine - a quine that can produce its source in multiple languages.
+
+# Copyright (c) 2021 Thomas Kremer
+
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License version 2 or 3 as
+# published by the Free Software Foundation.
+
+# usage:
+#   ./multilingual-quine > same.py
+#   ./multilingual-quine --lang perl > same.pl
+#  only in the perl version:
+#   ./multilingual-quine --unpack <destdir>
+#   ./multilingual-quine --pack <srcdir>
+
+import sys,re,argparse
+
+payload = "__PAYLOAD__"
+
+parser = argparse.ArgumentParser(description="multi-language cross-quine")
+parser.add_argument("--lang",default="python",help="output language")
+args = parser.parse_args()
+lang = args.lang
+
+def unpack_header_footer(payload,lang):
+  bin = bytes.fromhex(payload)
+  lang = lang.encode("latin1")
+  while len(bin) > 0:
+    lenn = int.from_bytes(bin[0:4],byteorder="little")
+    l = bin[4:4+lenn]
+    bin = bin[4+lenn:]
+    lenn = int.from_bytes(bin[0:4],byteorder="little")
+    h = bin[4:4+lenn]
+    bin = bin[4+lenn:]
+    lenn = int.from_bytes(bin[0:4],byteorder="little")
+    f = bin[4:4+lenn]
+    bin = bin[4+lenn:]
+    if l == lang:
+      return h.decode("latin1"),f.decode("latin1")
+
+head,foot = unpack_header_footer(payload,lang)
+sys.stdout.write("%s%s%s" % (head,payload,foot))

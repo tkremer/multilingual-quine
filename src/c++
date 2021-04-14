@@ -1,0 +1,80 @@
+#####LANGUAGE(c++)#####
+#####SEPARATOR(__PAYLOAD__)#####
+#####TEST(g++ -o tmpcpp.bin -x c++ %s && ./tmpcpp.bin %s > %s; rm tmpcpp.bin)#####
+
+/*
+ multilingual-quine - a quine that can produce its source in multiple languages.
+
+ Copyright (c) 2021 Thomas Kremer
+
+ This program is free software; you can redistribute it and/or modify it
+ under the terms of the GNU General Public License version 2 or 3 as
+ published by the Free Software Foundation.
+
+ usage:
+   g++ -o multilingual-quine -x c++ multilingual-quine.cc
+   ./multilingual-quine > same.cc
+   ./multilingual-quine --lang python > same.py
+  only in the perl version:
+   ./multilingual-quine --unpack <destdir>
+   ./multilingual-quine --pack <srcdir>
+*/
+
+#include <string>
+#include <utility>
+#include <iostream>
+
+using namespace std;
+
+string payload("__PAYLOAD__");
+
+pair<string,string> unpack_header_footer(string payload, string lang) {
+  size_t pl_len = payload.length()/2;
+  char bin[pl_len+1];
+  for (size_t i = 0; i < pl_len; i++) {
+    char s[3] = { payload[2*i], payload[2*i+1], 0};
+    sscanf(s,"%02x",&bin[i]);
+  }
+  for (size_t i = 0; i <= pl_len-4; ) {
+    uint32_t len;
+    len = *((uint32_t*)&bin[i]);
+    if (i+8+len > pl_len) break;
+    string l(&bin[i+4],&bin[i+4+len]);
+    i += 4+len;
+    len = *((uint32_t*)&bin[i]);
+    if (i+8+len > pl_len) break;
+    string h(&bin[i+4],&bin[i+4+len]);
+    i += 4+len;
+    len = *((uint32_t*)&bin[i]);
+    if (i+4+len > pl_len) break;
+    string f(&bin[i+4],&bin[i+4+len]);
+    i += 4+len;
+    if (l == lang) {
+      return make_pair(h,f);
+    }
+  }
+
+  cerr << /* vim syntax fail */
+    "language \"" << lang << 
+    "\" not found." << endl;
+  exit(2);
+}
+
+int main(int argc, char** argv) {
+  const char* c_lang = "c++";
+  for (int i = 1; i < argc; i++) {
+    if (string(argv[i]) == "--lang" && i+1 < argc) {
+      i++;
+      c_lang = argv[i];
+    } else {
+      cerr << "invalid args";
+      exit(2); 
+    }
+  }
+  //const char* c_lang = argc > 1 ? argv[1] : "c++";
+  string lang(c_lang);
+  pair<string,string> headfoot = unpack_header_footer(payload,lang);
+  string head(headfoot.first), foot(headfoot.second);
+  cout << head << payload << foot;
+  return 0;
+}

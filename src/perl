@@ -1,0 +1,123 @@
+#####LANGUAGE(perl)#####
+#####SEPARATOR(__PAYLOAD__)#####
+#####TEST(perl %s %s > %s)#####
+#!/usr/bin/perl
+
+# multilingual-quine - a quine that can produce its source in multiple languages.
+
+# Copyright (c) 2021 Thomas Kremer
+
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License version 2 or 3 as
+# published by the Free Software Foundation.
+
+# usage:
+#   ./multilingual-quine > same.pl
+#   ./multilingual-quine --lang python > same.py
+#  only in the perl version:
+#   ./multilingual-quine --unpack <destdir>
+#   ./multilingual-quine --pack <srcdir>
+
+use strict;
+use warnings;
+
+my $payload = "__PAYLOAD__";
+
+die "invalid args" if @ARGV % 2 != 0;
+my %args = @ARGV;
+die "invalid args" if grep !/^--/, keys %args;
+my $lang = $args{"--lang"}//"perl";
+
+sub unpack_header_footer {
+  my ($payload,$lang) = @_;
+  my $bin = pack "H*", $payload;
+  my @data = unpack "(V/a*)*", $bin;
+  for (0..@data/3-1) {
+    if ($data[3*$_] eq $lang) {
+      return @data[3*$_+1,3*$_+2];
+    }
+  }
+  die "language \"$lang\" not found.";
+}
+
+sub unpack_source {
+  my ($payload,$dest) = @_;
+  die "\"$dest\" already exists\n" if -e $dest;
+  mkdir $dest;
+  my $bin = pack "H*", $payload;
+  my @data = unpack "(V/a*)*", $bin;
+  for (0..@data/3-1) {
+    my ($lang,$head,$foot) = @data[3*$_..3*$_+2];
+    my $separator = "PAYLOAD";
+    my $suff = "";
+    my $rex = qr/\Q__$separator${suff}__\E/;
+    while ($head =~ /$rex/ || $foot =~ /$rex/) {
+      $suff++;
+      $rex = qr/\Q__$separator${suff}__\E/;
+    }
+    $separator = "__".$separator.$suff."__";
+    my $fname = sprintf "%s/%s", $dest,$lang;
+    open(my $f,">",$fname) or die "cannot open \"$fname\": $!";
+    print $f "#####LANGUAGE($lang)#####\n#####SEPARATOR($separator)#####\n".
+             $head.$separator.$foot;
+    close($f);
+  }
+}
+
+sub pack_source {
+  my ($src) = @_;
+  die "\"$src\" is not a directory\n" unless -e $src;
+  opendir(my $d, $src) or die "cannot open \"$src\": $!";
+  my @files = sort grep -f("$src/$_") && !/\.swp$/, readdir($d);
+  closedir($d);
+  my @tests;
+  for (@files) {
+    open(my $f,"<","$src/$_") or die "cannot open \"$src/$_\": $!";
+    local $/ = undef;
+    my $content = <$f>;
+    my %header;
+    $header{$1} = $2 while $content =~ s/^#####(\w+)\(([^\n]*)\)#####\n//;
+    my ($lang,$sep,$test) = @header{qw(LANGUAGE SEPARATOR TEST)};
+    die "bad header if \"$_\""
+      unless defined $lang && defined $sep;
+    my @parts = split /\Q$sep\E/, $content;
+    die "bad number of parts for \"$_\"" if @parts != 2;
+    $_ = pack "(V/a*)*",$lang,@parts;
+    push @tests, [$lang,$test] if defined $test;
+  }
+  if (@tests && ! -e "tests.sh") {
+    my $filename = "multilingual-quine.pl";
+    for (@tests) {
+      my ($lang,$templ) = @$_;
+      die "bad language name for testing: \"$lang\""
+        if $lang =~ /[^-+a-zA-Z0-9_]/;
+      $_ =
+        "./$filename --lang \"$lang\" > tests/$lang.0\n".
+        sprintf($templ."\n", "tests/$lang.0", "", "tests/$lang.1").
+        "cmp tests/$lang.0 tests/$lang.1 ||\n".
+        " { echo \"bad match of \\\"$lang\\\"\"; }\n".
+        sprintf($templ."\n", "tests/$lang.0", "--lang perl", "tests/$lang.2").
+        "cmp ./$filename tests/$lang.2 ||\n".
+        " { echo \"bad match of \\\"$lang --lang perl\\\"\"; }\n";
+    }
+    open(my $f, ">", "tests.sh") or die "cannot write tests.sh: $!";
+    print $f join "\n", "#!/bin/bash\nmkdir -p tests", @tests;
+    close($f);
+    chmod 0700, "tests.sh";
+  } else {
+    warn "tests.sh already exists" if @tests;
+  }
+  my $hex = unpack "H*", join("",@files);
+  return $hex;
+}
+
+if (defined $args{"--unpack"}) {
+  unpack_source($payload,$args{"--unpack"});
+  exit 0;
+}
+if (defined $args{"--pack"}) {
+  $payload = pack_source($args{"--pack"});
+}
+
+my ($head,$foot) = unpack_header_footer($payload,$lang);
+print $head.$payload.$foot;

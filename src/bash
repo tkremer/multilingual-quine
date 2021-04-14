@@ -1,0 +1,68 @@
+#####LANGUAGE(bash)#####
+#####SEPARATOR(__PAYLOAD__)#####
+#####TEST(/bin/bash %s %s > %s)#####
+#!/bin/bash
+
+# multilingual-quine - a quine that can produce its source in multiple languages.
+
+# Copyright (c) 2021 Thomas Kremer
+
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License version 2 or 3 as
+# published by the Free Software Foundation.
+
+# usage:
+#   ./multilingual-quine > same.sh
+#   ./multilingual-quine --lang python > same.py
+#  only in the perl version:
+#   ./multilingual-quine --unpack <destdir>
+#   ./multilingual-quine --pack <srcdir>
+
+payload="__PAYLOAD__"
+
+lang=bash
+while [ $# != 0 ]; do
+  arg="$1"
+  shift
+  case "$arg" in
+    --lang) lang="$1"; shift;;
+    *) echo "invalid arg \"$arg\"" >&2; exit 2;;
+  esac
+done
+
+unpack_header_footer() {
+  local payload="$1" lang="$2" state=2 hexlang l s
+  hexlang=$(printf "%s" "$lang" | xxd -p | tr -d '\n')
+  while [ ${#payload} -ge 4 ]; do
+    l="${payload:0:8}"
+    l="${l:6:2}${l:4:2}${l:2:2}${l:0:2}"
+    l=$((2 * 0x$l))
+    payload="${payload:8}"
+    s="${payload:0:$l}"
+    payload="${payload:$l}"
+    if ((state == 2)); then
+      if [ "$hexlang" == "$s" ]; then
+        state=3
+      else
+        state=0
+      fi
+    else
+      if ((state >= 3)); then
+        s="$(printf "%s%s" "$s" 31 | xxd -p -r)"
+        s="${s%1}"
+        if ((state == 3)); then
+          head="$s"
+        else
+          foot="$s"
+          return
+        fi
+      fi
+      ((state++))
+    fi
+  done
+  echo "language \"$lang\" not found." >&2
+  exit 2
+}
+
+unpack_header_footer "$payload" "$lang"
+printf "%s%s%s" "$head" "$payload" "$foot"

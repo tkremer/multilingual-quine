@@ -1,0 +1,60 @@
+#####LANGUAGE(lua)#####
+#####SEPARATOR(__PAYLOAD__)#####
+#####TEST(lua %s %s > %s)#####
+#!/usr/bin/lua
+
+-- multilingual-quine - a quine that can produce its source in multiple languages.
+--
+-- Copyright (c) 2021 Thomas Kremer
+--
+-- This program is free software; you can redistribute it and/or modify it
+-- under the terms of the GNU General Public License version 2 or 3 as
+-- published by the Free Software Foundation.
+--
+-- usage:
+--   ./multilingual-quine > same.lua
+--   ./multilingual-quine --lang python > same.py
+--  only in the perl version:
+--   ./multilingual-quine --unpack <destdir>
+--   ./multilingual-quine --pack <srcdir>
+
+payload = "__PAYLOAD__"
+
+lang = "lua"
+
+i=1
+while i <= #arg do
+  if arg[i] == "--lang" and i+1 <= #arg then
+    i = i+1
+    lang = arg[i]
+  else
+    error("invalid args")
+  end
+  i = i+1
+end
+
+function unpackV(s)
+  return s:byte(1)+s:byte(2)*256+(s:byte(3)+s:byte(4)*256)*65536
+end
+
+function unpack_header_footer(payload,lang)
+  bin = payload:gsub("..",function(x) return string.char(tonumber(x,16)); end)
+  while #bin > 0 do
+    len = unpackV(bin)
+    l = bin:sub(5,4+len)
+    bin = bin:sub(5+len)
+    len = unpackV(bin)
+    h = bin:sub(5,4+len)
+    bin = bin:sub(5+len)
+    len = unpackV(bin)
+    f = bin:sub(5,4+len)
+    bin = bin:sub(5+len)
+    if l == lang then
+      return h,f
+    end
+  end
+  error("language \""..lang.."\" not found.")
+end
+
+head,foot = unpack_header_footer(payload,lang)
+io.write(head..payload..foot)
