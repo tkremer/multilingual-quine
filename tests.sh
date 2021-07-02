@@ -16,6 +16,14 @@ g++ -o tmpcpp.bin -x c++ tests/c++.0 && ./tmpcpp.bin --lang perl > tests/c++.2; 
 cmp ./multilingual-quine.pl tests/c++.2 ||
  { echo "bad match of \"c++ --lang perl\""; }
 
+./multilingual-quine.pl --lang "haskell" > tests/haskell.0
+runhaskell tests/haskell.0  > tests/haskell.1
+cmp tests/haskell.0 tests/haskell.1 ||
+ { echo "bad match of \"haskell\""; }
+runhaskell tests/haskell.0 --lang perl > tests/haskell.2
+cmp ./multilingual-quine.pl tests/haskell.2 ||
+ { echo "bad match of \"haskell --lang perl\""; }
+
 ./multilingual-quine.pl --lang "java" > tests/java.0
 cp tests/java.0 MultilingualQuine.java; javac MultilingualQuine.java && java MultilingualQuine  > tests/java.1; rm MultilingualQuine.java MultilingualQuine.class
 cmp tests/java.0 tests/java.1 ||

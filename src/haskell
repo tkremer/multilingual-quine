@@ -1,0 +1,64 @@
+#####LANGUAGE(haskell)#####
+#####SEPARATOR(__PAYLOAD__)#####
+#####TEST(runhaskell %s %s > %s)#####
+
+{-
+
+  multilingual-quine - a quine that can produce its source in multiple languages.
+ 
+  Copyright (c) 2021 Thomas Kremer
+ 
+  This program is free software; you can redistribute it and/or modify it
+  under the terms of the GNU General Public License version 2 or 3 as
+  published by the Free Software Foundation.
+ 
+  usage:
+    ./multilingual-quine > same.hs
+    ./multilingual-quine --lang python > same.py
+   only in the perl version:
+    ./multilingual-quine --unpack <destdir>
+    ./multilingual-quine --pack <srcdir>
+
+-}
+
+module Main where
+import Data.Char (chr,ord)
+import System.Environment (getArgs)
+
+payload = "__PAYLOAD__"
+
+
+getlang [] = "haskell"
+getlang ("--lang":l:more) = l
+getlang (a:more) = error $ "invalid args: " ++ a
+--getlang a:more = getlang more
+
+unpack_hex [] = []
+unpack_hex [a] = error "bad hex"
+unpack_hex (a:b:more) = chr(hexnum(a)*16+hexnum(b)) : unpack_hex(more)
+  where hexnum(c) | '0' <= c && c <= '9' = ord(c)-ord('0')
+                  | 'a' <= c && c <= 'f' = ord(c)-ord('a')+10
+                  | 'A' <= c && c <= 'F' = ord(c)-ord('A')+10
+                  | otherwise            = error("bad hex")
+
+unpack_V l = foldr (\c acc -> (acc*256) + ord(c)) 0 (take 4 l)
+
+unpack_payload_elements pl 0 = [pl]
+unpack_payload_elements pl i =
+  let len   = unpack_V pl
+      chunk = take len $ drop 4 pl
+      more  = drop (len+4) pl
+  in chunk:unpack_payload_elements more (i-1)
+
+unpack_header_footer payload_bin lang = find payload_bin
+  where find [] = error "language not found"
+        find p  = 
+          let [lng,head,foot,more] = unpack_payload_elements p 3
+          in if (lng == lang) then (head,foot) else find more
+
+payload_bin = unpack_hex payload 
+
+main = getArgs >>= \args ->
+         let (head,foot) = unpack_header_footer payload_bin (getlang args)
+         in putStr $ head ++ payload ++ foot
+
